@@ -329,6 +329,25 @@
             container.innerHTML = `<div class="flex flex-wrap gap-2 items-center"><span class="text-[10px] font-black text-blue-600 uppercase mr-1">Filtros aplicados:</span> ${chipsHtml}</div>`;
         }
 
+        // Função para gerar uma cor única consistente para cada Loja
+        function getStoreColor(storeId) {
+            if (!storeId) return 'bg-slate-100 text-slate-600';
+            const colors = [
+                'bg-fuchsia-100 text-fuchsia-700', // Final 0
+                'bg-purple-100 text-purple-700',   // Final 1
+                'bg-pink-100 text-pink-700',       // Final 2
+                'bg-rose-100 text-rose-700',       // Final 3
+                'bg-orange-100 text-orange-700',   // Final 4
+                'bg-indigo-100 text-indigo-700',   // Final 5
+                'bg-cyan-100 text-cyan-700',       // Final 6
+                'bg-teal-100 text-teal-700',       // Final 7
+                'bg-amber-100 text-amber-700',     // Final 8
+                'bg-lime-100 text-lime-700'        // Final 9
+            ];
+            // Usa o módulo para garantir que sempre haja uma cor, mesmo para lojas com números altos
+            return colors[storeId % 10];
+        }
+
         function renderTimeline(vehicleId) {
             const data = allVehiclesData[vehicleId];
             let steps = data.steps;
@@ -360,7 +379,7 @@
                         <div class="timeline-line" style="left: 45px; right: 45px;"></div>
                         ${steps.map((step, idx) => {
                             const ringColor = step.status === 'done' ? 'border-[#10B981]' : (step.status === 'active' ? 'border-[#F59E0B]' : 'border-gray-300');
-                            const labelBg = step.typeLabel === 'CD' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-600';
+                            const labelBg = step.typeLabel === 'CD' ? 'bg-blue-50 text-blue-600' : getStoreColor(step.storeId);
                             const displayLabel = step.typeLabel === 'LOJA' && step.storeId ? `${step.typeLabel} ${step.storeId}` : step.typeLabel;
                             
                             // Remove o texto redundante "na loja X", "da Loja X" e "(Lacre)" do nome da etapa

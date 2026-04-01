@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCE - Rastreamento de Viagens</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        
+        /* Animação de pulsação para passos ativos */
+        @keyframes pulse-custom {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .animate-pulse-custom {
+            animation: pulse-custom 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .timeline-step {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .timeline-step:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Cartões de estado da linha do tempo */
+        .step-card {
+            width: 160px;
+            min-height: 150px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 10px 12px;
+            text-align: center;
+            z-index: 10;
+            position: relative;
+        }
+
+        .status-done { background-color: #E6F4F1; border: 1px solid #D1E9E4; color: #108E72; }
+        .status-active { background-color: #FFF9E6; border: 1px solid #FFEBB3; color: #B38600; }
+        .status-pending { background-color: #F3F4F6; border: 1px solid #E5E7EB; color: #6B7280; }
+
+        /* Linha conectora da linha do tempo */
+        .timeline-line {
+            position: absolute;
+            top: 24px;
+            height: 2px;
+            background-color: #E5E7EB;
+            z-index: 0;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        #modal-overlay { transition: opacity 0.3s ease; }
+        #modal-content { transition: transform 0.3s ease; }
+
+        /* Estilos simplificados para o cabeçalho de texto */
+        .header-text-item {
+            font-size: 13px;
+            color: #334155;
+            display: flex;
+            align-items: center;
+        }
+        .header-text-label {
+            font-weight: 800;
+            color: #1e293b;
+            margin-right: 4px;
+            font-size: 13px;
+            letter-spacing: 0.010em;
+        }
+
+        /* Side-nav logic */
+        #side-nav {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+        }
+        #side-nav-overlay {
+            transition: opacity 0.3s ease;
+            z-index: 90;
+        }
+
+        /* Chips de filtros ativos */
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            background-color: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+    </style>
+    <script>
+        const allVehiclesData = {
+            'K-54321': {
+                placa: 'KSA-4321',
+                lojas: [1, 2, 5], 
+                tripNumber: '00123',
+                type: 'Compartilhada',
+                status: 'EM_VIAGEM',
+                tempoTotal: '2h 45m',
+                steps: [
+                    { 
+                        id: '1-k', name: '1. Registro de Lacre', icon: 'Lock', status: 'done', time: '23/02 08:00', inc: '0 min', storeId: null, typeLabel: 'CD',
+                        details: { usuario: 'João Silva (Op. CD)', dataHora: '23/02/2026 - 08:00', veiculoInfo: 'KSA-4321', qtdePaletes: '25', loja: '99-CD Central', lacres: ['SEAL00123', 'SEAL00124'] }
+                    },
+                    { 
+                        id: '2-k', name: '2. Saída para entrega', icon: 'Truck', status: 'done', time: '23/02 08:15', inc: '15 min', storeId: null, typeLabel: 'CD',
+                        details: { usuario: 'Carlos Porto (Portaria)', dataHora: '23/02/2026 - 08:15', veiculoInfo: 'KSA-4321', qtdePaletes: '25', loja: '99-CD Central', lacres: ['SEAL00123', 'SEAL00124'] }
+                    },
+                    { 
+                        id: '3-k-5', name: '3. Chegada na Loja 5', icon: 'Store', status: 'done', time: '23/02 09:30', inc: '+1h 15m', storeId: 5, typeLabel: 'LOJA',
+                        details: { usuario: 'Marta Souza (Rec. L5)', dataHora: '23/02/2026 - 09:30', veiculoInfo: 'KSA-4321', qtdePaletes: '8', loja: 'Loja 5 - Sul', lacres: ['SEAL00123'] }
+                    },
+                    { 
+                        id: '4-k-5', name: '4. Validação de paletes na loja 5', icon: 'Boxes', status: 'done', time: '23/02 09:55', inc: '+1h 40m', storeId: 5, typeLabel: 'LOJA',
+                        details: { usuario: 'Marta Souza (Rec. L5)', dataHora: '23/02/2026 - 09:55', veiculoInfo: 'KSA4321', qtdePaletes: '8', loja: 'Loja 5 - Sul', lacres: ['SEAL00123'], paletes: ['Etq: 123 - Carga 1528 - Lote 1', 'Etq: 124 - Carga 1528 - Lote 1', 'Etq: 125 - Carga 1528 - Lote 2', 'Etq: 126 - Carga 1529 - Lote 1', 'Etq: 127 - Carga 1529 - Lote 2', 'Etq: 128 - Carga 1530 - Lote 1', 'Etq: 129 - Carga 1530 - Lote 2', 'Etq: 130 - Carga 1531 - Lote 1'] }
+                    },
+                    { 
+                        id: '5-k-5', name: '5. Saída da Loja 5 (Lacre)', icon: 'LockOpen', status: 'active', time: '23/02 10:10', inc: '+1h 55m', storeId: 5, typeLabel: 'LOJA',
+                        details: { usuario: 'Marta Souza (Rec. L5)', dataHora: '23/02/2026 - 10:10', veiculoInfo: 'KSA4321', qtdePaletes: '0', loja: 'Loja 5 - Sul', lacres: ['SEAL00125'] }
+                    },
+                    { 
+                        id: '3-k-1', name: '3. Chegada na Loja 1', icon: 'Store', status: 'pending', time: '23/02 10:45', inc: 'Previsto', storeId: 1, typeLabel: 'LOJA',
+                        details: { usuario: '---', dataHora: 'Previsto: 23/02 - 10:45', veiculoInfo: 'KSA4321', qtdePaletes: '10', loja: 'Loja 1 - Centro', lacres: [] }
+                    }
+                ]
+            },
+            'L-90876': {
+                placa: 'BRA-2E19',
+                lojas: [10], 
+                tripNumber: '00124',
+                type: 'Dedicada',
+                status: 'PENDENTE',
+                tempoTotal: '--',
+                steps: [
+                    { id: '1-l', name: '1. Registro de Lacre', icon: 'Lock', status: 'done', time: '23/02 07:30', inc: '0 min', storeId: null, typeLabel: 'CD' },
+                    { id: '2-l', name: '2. Saída para entrega', icon: 'Truck', status: 'pending', time: '23/02 07:45', inc: 'Previsto', storeId: null, typeLabel: 'CD' }
+                ]
+            },
+            'M-11223': {
+                placa: 'ABC-1D23',
+                lojas: [8, 12], 
+                tripNumber: '00125',
+                type: 'Compartilhada',
+                status: 'FINALIZADA',
+                tempoTotal: '3h 40m',
+                steps: [
+                    { id: '1-m', name: '1. Registro de Lacre', icon: 'Lock', status: 'done', time: '23/02 06:00', inc: '0 min', storeId: null, typeLabel: 'CD' },
+                    { id: '2-m', name: '2. Saída para entrega', icon: 'Truck', status: 'done', time: '23/02 06:15', inc: '15 min', storeId: null, typeLabel: 'CD' },
+                    { id: '3-m-8', name: '3. Chegada na Loja 8', icon: 'Store', status: 'done', time: '23/02 07:20', inc: '+1h 20m', storeId: 8, typeLabel: 'LOJA' },
+                    { id: '4-m-8', name: '4. Validação de paletes na loja 8', icon: 'Boxes', status: 'done', time: '23/02 07:50', inc: '+1h 50m', storeId: 8, typeLabel: 'LOJA', details: { usuario: 'Pedro Costa (Rec. L8)', dataHora: '23/02/2026 - 07:50', veiculoInfo: 'ABC-1D23', qtdePaletes: '4', loja: 'Loja 8 - Norte', paletes: ['Etq: 801 - Carga 4421 - Lote 1', 'Etq: 802 - Carga 4421 - Lote 1', 'Etq: 803 - Carga 4422 - Lote 2', 'Etq: 804 - Carga 4422 - Lote 2'] } },
+                    { id: '5-m-8', name: '5. Saída da Loja 8 (Lacre)', icon: 'LockOpen', status: 'done', time: '23/02 08:05', inc: '+2h 05m', storeId: 8, typeLabel: 'LOJA' },
+                    { id: '6-m', name: '6. Retorno ao CD', icon: 'Warehouse', status: 'done', time: '23/02 09:40', inc: '+3h 40m', storeId: null, typeLabel: 'CD' }
+                ]
+            }
+        };
+
+        let currentVehicleFilter = 'ALL';
+        let currentStoreFilter = 'ALL';
+        let currentStatusFilter = 'ALL';
+
+        function renderIcon(name, status) {
+            let svgPath = '';
+            let color = status === 'done' ? '#10B981' : (status === 'active' ? '#F59E0B' : '#9CA3AF');
+            switch(name) {
+                case 'Lock': svgPath = 'M12 17a2 2 0 0 0 2-2V9a2 2 0 0 0-4 0v6a2 2 0 0 0 2 2zM7 11V7a5 5 0 0 1 10 0v4'; break;
+                case 'Truck': svgPath = 'M10 17h4V5H2v12h3m15 0h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1m-9 1a3 3 0 100-6 3 3 0 000 6zm14 0a3 3 0 100-6 3 3 0 000 6z'; break;
+                case 'Store': svgPath = 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z'; break;
+                case 'Boxes': svgPath = 'M21 8V20.9932C21 21.5501 20.5552 22H3.9934C3.44476 22 3 21.5552 3 20.9932V8L12 2L21 8ZM12 4.602L5 9.27V20H19V9.27L12 4.602Z'; break;
+                case 'LockOpen': svgPath = 'M7 11V7a5 5 0 0 1 9.9-1M7 11v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-4'; break;
+                case 'Warehouse': svgPath = 'M3 21V11L12 5L21 11V21H19V12.1584L12 7.5L5 12.1584V21H3ZM10 13H14V21H10V13Z'; break;
+                default: svgPath = 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z';
+            }
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${status === 'active' ? 'animate-pulse-custom' : ''}"><path d="${svgPath}"></path></svg>`;
+        }
+
+        function toggleSideNav(open) {
+            const sideNav = document.getElementById('side-nav');
+            const overlay = document.getElementById('side-nav-overlay');
+            if (open) {
+                sideNav.style.transform = 'translateX(0)';
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.style.opacity = '1', 10);
+            } else {
+                sideNav.style.transform = 'translateX(100%)';
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        }
+
+        function showStepDetails(vehicleId, stepId) {
+            const vehicle = allVehiclesData[vehicleId];
+            if (!vehicle) return;
+            const step = vehicle.steps.find(s => s.id === stepId);
+            
+            const d = step.details || {
+                usuario: 'Equipa Operacional',
+                dataHora: '23/02/2026 - ' + (step.time || '--:--'),
+                veiculoInfo: vehicle.placa,
+                qtdePaletes: '---',
+                loja: step.storeId ? 'Loja ' + step.storeId : '99-CD Central',
+                lacres: [],
+                notas: 'Sem observações adicionais registadas.'
+            };
+
+            document.getElementById('m-title').innerText = step.name;
+            document.getElementById('m-usuario').innerText = d.usuario;
+            document.getElementById('m-datahora').innerText = d.dataHora;
+            document.getElementById('m-loja').innerText = d.loja;
+            document.getElementById('m-viagem').innerText = vehicle.tripNumber;
+
+            const dynamicSection = document.getElementById('m-dynamic-section');
+            const isValidationStep = step.name.toLowerCase().includes('valida');
+
+            if (isValidationStep) {
+                // Se for um passo de validação, mostra a grelha de paletes
+                const paletesList = d.paletes || Array.from({length: parseInt(d.qtdePaletes) || 0}, (_, i) => `Etq: ${100 + i} - Carga ${1500 + Math.floor(i/2)} - Lote ${1 + (i % 3)}`);
+                
+                const paletesHtml = paletesList.length > 0 
+                    ? paletesList.map(p => `
+                        <div class="flex items-center gap-3 p-2.5 bg-emerald-50 border border-emerald-100 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><path d="M21 8V20.9932C21 21.5501 20.5552 22 3.9934C3.44476 22 3 21.5552 3 20.9932V8L12 2L21 8ZM12 4.602L5 9.27V20H19V9.27L12 4.602Z"></path></svg>
+                            <span class="text-xs font-bold text-emerald-700 leading-tight">${p}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="ml-auto flex-shrink-0"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </div>
+                    `).join('')
+                    : '<span class="text-xs text-gray-400 italic">Nenhum palete registado</span>';
+
+                dynamicSection.innerHTML = `
+                    <div class="border border-emerald-100 rounded-[20px] p-5 mb-6 bg-emerald-50/30 max-h-[220px] overflow-y-auto custom-scrollbar">
+                        <div class="flex justify-between items-center mb-3">
+                            <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Paletes Validados (${d.qtdePaletes})</p>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${paletesHtml}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Caso contrário (como registo de lacre), mostra a vista normal de lacres
+                const lacresHtml = d.lacres && d.lacres.length > 0 
+                    ? d.lacres.map(l => `<span class="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-[11px] font-bold text-gray-600">${l}</span>`).join(' ')
+                    : '<span class="text-xs text-gray-400 italic">Nenhum lacre registado</span>';
+
+                dynamicSection.innerHTML = `
+                    <div class="border border-blue-100 rounded-[20px] p-5 mb-6 bg-blue-50/20">
+                        <p class="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">Lacres de Expedição</p>
+                        <div class="flex flex-wrap gap-2">
+                            ${lacresHtml}
+                        </div>
+                    </div>
+                `;
+            }
+
+            const overlay = document.getElementById('modal-overlay');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            setTimeout(() => { overlay.style.opacity = '1'; document.getElementById('modal-content').style.transform = 'scale(1)'; }, 10);
+        }
+
+        function closeModal() {
+            const overlay = document.getElementById('modal-overlay');
+            overlay.style.opacity = '0';
+            document.getElementById('modal-content').style.transform = 'scale(0.9)';
+            setTimeout(() => { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }, 300);
+        }
+
+        function renderActiveFiltersSummary() {
+            const container = document.getElementById('active-filters-bar');
+            const dateStart = document.getElementById('date-start')?.value;
+            const dateEnd = document.getElementById('date-end')?.value;
+            
+            let chipsHtml = '';
+
+            if (dateStart && dateEnd) {
+                const ds = dateStart.split('-').reverse().slice(0, 2).join('/');
+                const de = dateEnd.split('-').reverse().slice(0, 2).join('/');
+                chipsHtml += `<div class="filter-chip">📅 ${ds} - ${de}</div>`;
+            }
+
+            if (currentVehicleFilter !== 'ALL') {
+                const vName = allVehiclesData[currentVehicleFilter].placa;
+                chipsHtml += `<div class="filter-chip">🚛 Veículo: ${vName}</div>`;
+            }
+
+            if (currentStoreFilter !== 'ALL') {
+                chipsHtml += `<div class="filter-chip">🏪 Loja: ${currentStoreFilter}</div>`;
+            }
+
+            if (currentStatusFilter !== 'ALL') {
+                chipsHtml += `<div class="filter-chip">⚖️ Status: ${currentStatusFilter.replace('_', ' ')}</div>`;
+            }
+
+            if (chipsHtml === '') {
+                chipsHtml = '<span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Nenhum filtro específico aplicado</span>';
+            }
+
+            container.innerHTML = `<div class="flex flex-wrap gap-2 items-center"><span class="text-[10px] font-black text-blue-600 uppercase mr-1">Filtros aplicados:</span> ${chipsHtml}</div>`;
+        }
+
+        function renderTimeline(vehicleId) {
+            const data = allVehiclesData[vehicleId];
+            let steps = data.steps;
+
+            if (currentStoreFilter !== 'ALL') {
+                const sId = parseInt(currentStoreFilter);
+                steps = data.steps.filter(s => s.storeId === null || s.storeId === sId);
+            }
+
+            const statusColor = data.status === 'EM_VIAGEM' ? 'text-amber-600' : (data.status === 'FINALIZADA' ? 'text-emerald-600' : 'text-slate-500');
+
+            return `
+                <div class="mb-10 border-b border-slate-100 pb-10 last:border-0 last:mb-0">
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-8 px-2">
+                        <div class="header-text-item"><span class="header-text-label">Viagem:</span> <span class="font-bold">${data.tripNumber}</span></div>
+                        <div class="h-4 w-px bg-slate-200 hidden md:block"></div>
+                        <div class="header-text-item"><span class="header-text-label">Loja:</span> <span class="font-bold">${data.lojas.join(', ')}</span></div>
+                        <div class="h-4 w-px bg-slate-200 hidden md:block"></div>
+                        <div class="header-text-item"><span class="header-text-label">Veículo:</span> <span class="font-bold">${data.placa}</span></div>
+                        <div class="h-4 w-px bg-slate-200 hidden md:block"></div>
+                        <div class="header-text-item"><span class="header-text-label">Entrega:</span> <span class="font-bold">${data.type}</span></div>
+                        <div class="h-4 w-px bg-slate-200 hidden md:block"></div>
+                        <div class="header-text-item"><span class="header-text-label">Status:</span> <span class="font-bold ${statusColor}">${data.status.replace('_', ' ')}</span></div>
+                        <div class="h-4 w-px bg-slate-200 hidden md:block"></div>
+                        <div class="header-text-item"><span class="header-text-label">Tempo:</span> <span class="font-bold text-slate-700">${data.tempoTotal || '--'}</span></div>
+                    </div>
+
+                    <div class="relative flex items-start gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                        <div class="timeline-line" style="left: 45px; right: 45px;"></div>
+                        ${steps.map((step, idx) => {
+                            const ringColor = step.status === 'done' ? 'border-[#10B981]' : (step.status === 'active' ? 'border-[#F59E0B]' : 'border-gray-300');
+                            const labelBg = step.typeLabel === 'CD' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-600';
+                            const displayLabel = step.typeLabel === 'LOJA' && step.storeId ? `${step.typeLabel} ${step.storeId}` : step.typeLabel;
+                            
+                            // Remove o texto redundante "na loja X", "da Loja X" e "(Lacre)" do nome da etapa
+                            const displayName = step.name.replace(/\s+(na|da)\s+[Ll]oja\s+\d+/g, '').replace(/\s*\([Ll]acre\)/gi, '');
+                            
+                            // Lógica para separar data e hora, adicionando um ícone e formatação visual ao tempo
+                            const [datePart, timePart] = step.time ? step.time.split(' ') : ['--', '--:--'];
+                            const timeDisplay = timePart ? `${datePart} <span class="mx-1 opacity-40">•</span> ${timePart}` : step.time;
+
+                            // Customização do indicador de atraso/adiantamento (incremento)
+                            let incHtml = '';
+                            if (step.inc) {
+                                if (step.inc === 'Previsto') {
+                                    incHtml = `<span class="text-[9px] font-black tracking-widest text-slate-400 uppercase">Previsto</span>`;
+                                } else if (step.inc === '0 min') {
+                                    incHtml = `<span class="text-[9px] font-black tracking-widest text-emerald-600 uppercase">Início</span>`;
+                                } else {
+                                    const incColor = step.status === 'done' ? 'text-[#108E72]' : (step.status === 'active' ? 'text-[#B38600]' : 'text-slate-500');
+                                    incHtml = `<span class="text-[9px] font-black tracking-widest ${incColor} uppercase">${step.inc}</span>`;
+                                }
+                            }
+
+                            // Fundo da caixa de tempo de acordo com o status
+                            const timeBoxBg = step.status === 'pending' ? 'bg-slate-200/50 text-slate-500' : 'bg-white/60 text-slate-800 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
+                            
+                            return `
+                                <div class="flex flex-col items-center min-w-[160px] timeline-step" onclick="showStepDetails('${vehicleId}', '${step.id}')">
+                                    <div class="w-12 h-12 rounded-full border-2 ${ringColor} bg-white flex items-center justify-center mb-4 z-10 shadow-sm transition-transform hover:scale-110">
+                                        ${renderIcon(step.icon, step.status)}
+                                    </div>
+                                    <div class="step-card status-${step.status} shadow-sm border-b-4 border-b-black/5 hover:shadow-md transition-shadow">
+                                        
+                                        <div class="w-full flex flex-col items-center">
+                                            <span class="px-2 py-0.5 ${labelBg} rounded text-[9px] font-black tracking-widest uppercase mb-2 shadow-[0_1px_1px_rgba(0,0,0,0.05)]">${displayLabel}</span>
+                                            <p class="text-[11px] font-bold leading-tight uppercase text-slate-800 line-clamp-2 px-1">${displayName}</p>
+                                        </div>
+
+                                        <div class="w-full mt-3 flex flex-col items-center gap-1.5">
+                                            <div class="flex items-center justify-center w-full ${timeBoxBg} rounded-md py-1.5 border border-white/40">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="mr-1.5 opacity-60"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                                <span class="text-[10px] font-bold">${timeDisplay}</span>
+                                            </div>
+                                            ${incHtml}
+                                        </div>
+
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function refreshUI() {
+            renderActiveFiltersSummary(); // Atualiza a barra de filtros
+            const container = document.getElementById('timelines-container');
+            container.innerHTML = '';
+            
+            const filteredVehicles = Object.keys(allVehiclesData).filter(id => {
+                const vehicle = allVehiclesData[id];
+                const matchVehicle = currentVehicleFilter === 'ALL' || currentVehicleFilter === id;
+                const matchStatus = currentStatusFilter === 'ALL' || currentStatusFilter === vehicle.status;
+                return matchVehicle && matchStatus;
+            });
+
+            if (filteredVehicles.length === 0) {
+                container.innerHTML = '<div class="p-12 text-center text-slate-400 font-bold uppercase tracking-widest">Nenhuma viagem encontrada com estes filtros.</div>';
+                return;
+            }
+
+            filteredVehicles.forEach(id => {
+                container.innerHTML += renderTimeline(id);
+            });
+        }
+
+        function setDefaultDates() {
+            const dateStart = document.getElementById('date-start');
+            const dateEnd = document.getElementById('date-end');
+            const today = new Date().toISOString().split('T')[0];
+            if(dateStart) dateStart.value = today;
+            if(dateEnd) dateEnd.value = today;
+        }
+
+        window.onload = function() {
+            setDefaultDates();
+            refreshUI();
+        };
+    </script>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 lg:p-12">
+
+    <!-- OVERLAY PARA SIDE-NAV -->
+    <div id="side-nav-overlay" class="fixed inset-0 bg-black/40 hidden opacity-0 transition-opacity cursor-pointer" onclick="toggleSideNav(false)"></div>
+
+    <!-- SIDE-NAV FILTRO -->
+    <div id="side-nav" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl translate-x-full overflow-y-auto flex flex-col">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <h2 class="text-sm font-black text-slate-800 uppercase tracking-widest">Painel de Filtros</h2>
+            <button onclick="toggleSideNav(false)" class="p-2 text-slate-400 hover:text-slate-900 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <div class="p-8 space-y-8 flex-1">
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Data Inicial:</label>
+                <input type="date" id="date-start" onchange="refreshUI()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Data Final:</label>
+                <input type="date" id="date-end" onchange="refreshUI()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Veículo:</label>
+                <select onchange="currentVehicleFilter = this.value; refreshUI();" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                    <option value="ALL">TODOS OS VEÍCULOS</option>
+                    <option value="K-54321">KSA-4321</option>
+                    <option value="L-90876">BRA-2E19</option>
+                    <option value="M-11223">ABC-1D23</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Filtrar por Loja:</label>
+                <select onchange="currentStoreFilter = this.value; refreshUI();" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                    <option value="ALL">TODAS AS PARADAS</option>
+                    <option value="1">Loja 1</option>
+                    <option value="2">Loja 2</option>
+                    <option value="5">Loja 5</option>
+                    <option value="8">Loja 8</option>
+                    <option value="10">Loja 10</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Filtrar por Status:</label>
+                <select onchange="currentStatusFilter = this.value; refreshUI();" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                    <option value="ALL">TODOS OS STATUS</option>
+                    <option value="PENDENTE">PENDENTE</option>
+                    <option value="EM_VIAGEM">EM VIAGEM</option>
+                    <option value="FINALIZADA">FINALIZADA</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-slate-100">
+            <button onclick="toggleSideNav(false)" class="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl transition-all uppercase tracking-widest text-[10px] hover:bg-blue-700 active:scale-95">
+                Aplicar Filtros
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 md:p-10">
+        
+        <!-- Cabeçalho Principal -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 border-b border-slate-50 pb-6 gap-4">
+            <h1 class="text-2xl font-black text-slate-800 tracking-tighter uppercase flex items-center gap-3">
+                <div class="w-2 h-8 bg-blue-600 rounded-full"></div>
+                Linha do Tempo de Entregas
+            </h1>
+            
+            <!-- BOTÃO FILTRO -->
+            <button onclick="toggleSideNav(true)" class="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all active:scale-95 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                <span class="text-xs uppercase tracking-widest">Filtro</span>
+            </button>
+        </div>
+
+        <!-- CAMPO: Filtros Aplicados -->
+        <div id="active-filters-bar" class="mb-10 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 min-h-[56px] flex items-center">
+            <!-- Renderizado via JavaScript -->
+        </div>
+
+        <div id="timelines-container" class="space-y-4"></div>
+
+        <div class="mt-12 text-center p-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+            <p class="text-[11px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Dica: Clique em um card para abrir a auditoria detalhada
+            </p>
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALHES -->
+    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden items-center justify-center p-4 opacity-0" onclick="closeModal()">
+        <div id="modal-content" class="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden transform scale-90" onclick="event.stopPropagation()">
+            <div class="p-8">
+                <h2 id="m-title" class="text-2xl font-black text-[#4F8AFF] mb-8 tracking-tighter uppercase">Nome do Passo</h2>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p class="text-[9px] font-black text-slate-400 uppercase mb-1 tracking-widest">Usuário Responsável</p>
+                        <p id="m-usuario" class="text-xs font-black text-slate-700">--</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p class="text-[9px] font-black text-slate-400 uppercase mb-1 tracking-widest">Data e Hora</p>
+                        <p id="m-datahora" class="text-xs font-black text-slate-700">--</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p class="text-[9px] font-black text-gray-400 uppercase mb-1 tracking-widest">Empresa</p>
+                        <p id="m-loja" class="text-xs font-black text-slate-700">--</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p class="text-[9px] font-black text-gray-400 uppercase mb-1 tracking-widest">Nro da Viagem</p>
+                        <p id="m-viagem" class="text-xs font-black text-slate-700">--</p>
+                    </div>
+                </div>
+
+                <div id="m-dynamic-section"></div>
+
+                <button onclick="closeModal()" class="w-full py-4 bg-[#3B82F6] hover:bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-200 transition-all uppercase tracking-widest text-sm active:scale-95">
+                    Fechar Detalhes
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

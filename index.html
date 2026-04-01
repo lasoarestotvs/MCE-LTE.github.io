@@ -172,18 +172,37 @@
         let currentStatusFilter = 'ALL';
 
         function renderIcon(name, status) {
-            let svgPath = '';
+            let innerSvg = '';
             let color = status === 'done' ? '#10B981' : (status === 'active' ? '#F59E0B' : '#9CA3AF');
             switch(name) {
-                case 'Lock': svgPath = 'M12 17a2 2 0 0 0 2-2V9a2 2 0 0 0-4 0v6a2 2 0 0 0 2 2zM7 11V7a5 5 0 0 1 10 0v4'; break;
-                case 'Truck': svgPath = 'M10 17h4V5H2v12h3m15 0h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1m-9 1a3 3 0 100-6 3 3 0 000 6zm14 0a3 3 0 100-6 3 3 0 000 6z'; break;
-                case 'Store': svgPath = 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z'; break;
-                case 'Boxes': svgPath = 'M21 8V20.9932C21 21.5501 20.5552 22H3.9934C3.44476 22 3 21.5552 3 20.9932V8L12 2L21 8ZM12 4.602L5 9.27V20H19V9.27L12 4.602Z'; break;
-                case 'LockOpen': svgPath = 'M7 11V7a5 5 0 0 1 9.9-1M7 11v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-4'; break;
-                case 'Warehouse': svgPath = 'M3 21V11L12 5L21 11V21H19V12.1584L12 7.5L5 12.1584V21H3ZM10 13H14V21H10V13Z'; break;
-                default: svgPath = 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z';
+                case 'Lock': 
+                    // Registro de Lacre -> Escudo com Check (Segurança e Lacre)
+                    innerSvg = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path>'; 
+                    break;
+                case 'Truck': 
+                    // Saída para entrega -> Caminhão de transporte moderno
+                    innerSvg = '<rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle>'; 
+                    break;
+                case 'Store': 
+                    // Chegada -> Pino de Localização (Map Pin) apontando o destino
+                    innerSvg = '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle>'; 
+                    break;
+                case 'Boxes': 
+                    // Validação de Paletes -> Prancheta de Auditoria com Check
+                    innerSvg = '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1Z"></path><path d="m9 14 2 2 4-4"></path>'; 
+                    break;
+                case 'LockOpen': 
+                    // Saída da Loja -> Seta indicando Partida/Saída do local
+                    innerSvg = '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>'; 
+                    break;
+                case 'Warehouse': 
+                    // Retorno ao CD -> Edifício / Armazém
+                    innerSvg = '<path d="M3 21V8l9-4 9 4v13"></path><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"></path>'; 
+                    break;
+                default: 
+                    innerSvg = '<circle cx="12" cy="12" r="10"></circle>';
             }
-            return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${status === 'active' ? 'animate-pulse-custom' : ''}"><path d="${svgPath}"></path></svg>`;
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${status === 'active' ? 'animate-pulse-custom' : ''}">${innerSvg}</svg>`;
         }
 
         function toggleSideNav(open) {
@@ -287,20 +306,20 @@
             if (dateStart && dateEnd) {
                 const ds = dateStart.split('-').reverse().slice(0, 2).join('/');
                 const de = dateEnd.split('-').reverse().slice(0, 2).join('/');
-                chipsHtml += `<div class="filter-chip">📅 ${ds} - ${de}</div>`;
+                chipsHtml += `<div class="filter-chip">Data: ${ds} - ${de}</div>`;
             }
 
             if (currentVehicleFilter !== 'ALL') {
                 const vName = allVehiclesData[currentVehicleFilter].placa;
-                chipsHtml += `<div class="filter-chip">🚛 Veículo: ${vName}</div>`;
+                chipsHtml += `<div class="filter-chip">Veículo: ${vName}</div>`;
             }
 
             if (currentStoreFilter !== 'ALL') {
-                chipsHtml += `<div class="filter-chip">🏪 Loja: ${currentStoreFilter}</div>`;
+                chipsHtml += `<div class="filter-chip">Loja: ${currentStoreFilter}</div>`;
             }
 
             if (currentStatusFilter !== 'ALL') {
-                chipsHtml += `<div class="filter-chip">⚖️ Status: ${currentStatusFilter.replace('_', ' ')}</div>`;
+                chipsHtml += `<div class="filter-chip">Status: ${currentStatusFilter.replace('_', ' ')}</div>`;
             }
 
             if (chipsHtml === '') {
